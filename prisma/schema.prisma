@@ -1,13 +1,185 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RiskStatus {
+  ON_TRACK
+  BEHIND
+  AT_RISK
+  CRITICAL
+}
+
+enum EvidenceType {
+  IMAGE
+  NEWS_CLIPPING
+  DOCUMENT
+  VIDEO
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ActionStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+model School {
+  id         String   @id @default(cuid())
+  schoolCode String   @unique
+  schoolName String
+  district   String
+  block      String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  submissions MonthlySubmission[]
+
+  @@index([district])
+  @@index([block])
+}
+
+model MonthlySubmission {
+  id                   String     @id @default(cuid())
+  schoolId             String
+  reportingMonth       DateTime
+  grade                String
+  subject              String
+  pblConducted         Boolean
+  evidenceSubmitted    Boolean
+  enrollment           Int
+  attendance           Int
+  attendancePercentage Float
+  riskStatus           RiskStatus
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, reportingMonth, grade, subject])
+  @@index([schoolId])
+  @@index([reportingMonth])
+  @@index([grade])
+  @@index([subject])
+  @@index([riskStatus])
+}
+
+model Grant {
+  id               String   @id @default(cuid())
+  grantCode        String   @unique
+  donor            String
+  grantName        String
+  periodStart      DateTime
+  periodEnd        DateTime
+  coveredDistricts String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  financeLines GrantFinanceLine[]
+  reports      GrantReport[]
+  evidences    Evidence[]
+
+  @@index([donor])
+  @@index([grantName])
+}
+
+model GrantFinanceLine {
+  id                        String   @id @default(cuid())
+  grantId                   String
+  reportingMonth            DateTime
+  budgetLine                String
+  approvedBudgetUnits       Float
+  monthlyUtilizedUnits      Float
+  cumulativeUtilizedUnits   Float
+  cumulativeUtilizationRate Float
+  financeNote               String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  grant Grant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@unique([grantId, reportingMonth, budgetLine])
+  @@index([reportingMonth])
+}
+
+model GrantReport {
+  id                     String     @id @default(cuid())
+  grantId                String
+  reportingMonth         DateTime
+  periodEndDate          DateTime
+  reportDueDate          DateTime
+  reportStatus           String
+  sampledSchoolRecords   Int
+  schoolsCompletedPbl    Int
+  pblCompletionRate      Float
+  schoolsWithEvidence    Int
+  evidenceSubmissionRate Float
+  totalEnrollment        Int
+  totalAttendance        Int
+  attendanceRate         Float
+  riskStatus             RiskStatus
+  milestoneSummary       String
+  draftReportText        String?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  grant Grant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@unique([grantId, reportingMonth])
+  @@index([reportingMonth])
+  @@index([riskStatus])
+}
+
+model Evidence {
+  id               String       @id @default(cuid())
+  recordCode       String       @unique
+  grantId          String
+  type             EvidenceType
+  donor            String
+  reportingMonth   DateTime
+  district         String
+  title            String
+  summaryOrCaption String
+  fileName         String
+  relativePath     String
+  usageNote        String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  grant Grant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
+  @@index([reportingMonth])
+  @@index([type])
+}
+
+model ActionItem {
+  id           String       @id @default(cuid())
+  district     String
+  block        String
+  priority     Priority
+  owner        String
+  dueDate      DateTime
+  status       ActionStatus @default(OPEN)
+  linkedMetric String
+  description  String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([district])
+  @@index([block])
+  @@index([status])
+  @@index([priority])
 }
