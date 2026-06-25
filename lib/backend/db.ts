@@ -13,8 +13,18 @@ function createClient(): PrismaClient {
     throw new Error("DATABASE_URL is not set.");
   }
 
-  if (databaseUrl.startsWith("file:")) {
-    const adapter = new PrismaBetterSqlite3({ url: databaseUrl });
+  console.log("DATABASE_URL:", databaseUrl);
+
+  // Handle SQLite (file: prefix, relative path, or .db extension)
+  const isSQLite = databaseUrl.startsWith("file:") ||
+                   !databaseUrl.includes("://") ||
+                   databaseUrl.endsWith(".db");
+
+  console.log("isSQLite:", isSQLite);
+
+  if (isSQLite) {
+    const url = databaseUrl.startsWith("file:") ? databaseUrl : `file:${databaseUrl}`;
+    const adapter = new PrismaBetterSqlite3({ url });
     return new PrismaClient({ adapter });
   }
 

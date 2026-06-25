@@ -1,16 +1,27 @@
 import { ActionStatus, Priority } from "@/lib/backend/db";
 import { prisma } from "../db";
 import { HttpError } from "../http";
-import { buildSubmissionWhere, type SubmissionFilters } from "../models/submission.model";
-import { RISK_LABELS, classifyRisk, explainRisk, priorityFromRisk } from "../risk";
+import {
+  buildSubmissionWhere,
+  type SubmissionFilters,
+} from "../models/submission.model";
+import {
+  RISK_LABELS,
+  classifyRisk,
+  explainRisk,
+  priorityFromRisk,
+} from "../risk";
 
 type SubmissionWithSchool = Awaited<ReturnType<typeof loadSubmissions>>[number];
 
 function monthFromInput(value?: string | Date) {
   if (!value) return undefined;
   if (value instanceof Date) return value;
-  const date = new Date(value.length === 7 ? `${value}-01T00:00:00.000Z` : value);
-  if (Number.isNaN(date.getTime())) throw new HttpError(422, "Invalid reportingMonth.");
+  const date = new Date(
+    value.length === 7 ? `${value}-01T00:00:00.000Z` : value,
+  );
+  if (Number.isNaN(date.getTime()))
+    throw new HttpError(422, "Invalid reportingMonth.");
   return date;
 }
 
@@ -42,11 +53,15 @@ function summarizeRows(rows: SubmissionWithSchool[]) {
   const totalSchools = schoolIds.size;
   const participatingSchools = participatingSchoolIds.size;
   const schoolsWithEvidence = evidenceSchoolIds.size;
-  const participationPercentage = totalSchools ? participatingSchools / totalSchools : 0;
+  const participationPercentage = totalSchools
+    ? participatingSchools / totalSchools
+    : 0;
   const evidenceSubmissionPercentage = participatingSchools
     ? schoolsWithEvidence / participatingSchools
     : 0;
-  const attendancePercentage = totalEnrollment ? totalAttendance / totalEnrollment : 0;
+  const attendancePercentage = totalEnrollment
+    ? totalAttendance / totalEnrollment
+    : 0;
 
   return {
     totalSchools,
@@ -59,7 +74,10 @@ function summarizeRows(rows: SubmissionWithSchool[]) {
     attendancePercentage,
     risk: {
       participation: explainRisk("Participation", participationPercentage),
-      evidenceSubmission: explainRisk("Evidence submission", evidenceSubmissionPercentage),
+      evidenceSubmission: explainRisk(
+        "Evidence submission",
+        evidenceSubmissionPercentage,
+      ),
       attendance: explainRisk("Attendance", attendancePercentage),
     },
   };
@@ -101,11 +119,15 @@ export async function getFilterOptions() {
   return {
     reportingMonths: months.map((item) => monthLabel(item.reportingMonth)),
     districts: [...new Set(schools.map((school) => school.district))],
-    blocksByDistrict: schools.reduce<Record<string, string[]>>((acc, school) => {
-      acc[school.district] ??= [];
-      if (!acc[school.district].includes(school.block)) acc[school.district].push(school.block);
-      return acc;
-    }, {}),
+    blocksByDistrict: schools.reduce<Record<string, string[]>>(
+      (acc, school) => {
+        acc[school.district] ??= [];
+        if (!acc[school.district].includes(school.block))
+          acc[school.district].push(school.block);
+        return acc;
+      },
+      {},
+    ),
     grades: grades.map((item) => item.grade),
     subjects: subjects.map((item) => item.subject),
   };
@@ -118,46 +140,68 @@ export async function getDashboard(filters: {
   grade?: string;
   subject?: string;
 }) {
-  const reportingMonth =
-    monthFromInput(filters.reportingMonth) ??
-    (
-      await prisma.monthlySubmission.findFirst({
-        select: { reportingMonth: true },
-        orderBy: { reportingMonth: "desc" },
-      })
-    )?.reportingMonth;
+  try {
+    const reportingMonth =
+      monthFromInput(filters.reportingMonth) ??
+      (
+        await prisma.monthlySubmission.findFirst({
+          select: { reportingMonth: true },
+          orderBy: { reportingMonth: "desc" },
+        })
+      )?.reportingMonth;
 
-  if (!reportingMonth) {
+    if (!reportingMonth) {
+      return {
+        filters: { ...filters, reportingMonth: null },
+        kpis: summarizeRows([]),
+        movement: null,
+      };
+    }
+
+    const scopedFilters = { ...filters, reportingMonth };
+
+    const [currentRows, previousRows] = await Promise.all([
+      loadSubmissions(scopedFilters),
+      loadSubmissions({
+        ...scopedFilters,
+        reportingMonth: previousMonth(reportingMonth),
+      }),
+    ]);
+
+    const current = summarizeRows(currentRows);
+    const previous = summarizeRows(previousRows);
+
     return {
-      filters: { ...filters, reportingMonth: null },
-      kpis: summarizeRows([]),
-      movement: null,
+      filters: {
+        ...filters,
+        reportingMonth: monthLabel(reportingMonth),
+      },
+      kpis: current,
+      movement: {
+        participationPercentage: movement(
+          current.participationPercentage,
+          previous.participationPercentage,
+        ),
+        evidenceSubmissionPercentage: movement(
+          current.evidenceSubmissionPercentage,
+          previous.evidenceSubmissionPercentage,
+        ),
+        attendancePercentage: movement(
+          current.attendancePercentage,
+          previous.attendancePercentage,
+        ),
+      },
     };
+  } catch (error) {
+    console.error("Error in getDashboard:", error);
+
+    if (error instanceof Error) {
+      console.error("Message:", error.message);
+      console.error("Stack:", error.stack);
+    }
+
+    throw error; // Let the API route handle the response
   }
-
-  const scopedFilters = { ...filters, reportingMonth };
-  const [currentRows, previousRows] = await Promise.all([
-    loadSubmissions(scopedFilters),
-    loadSubmissions({ ...scopedFilters, reportingMonth: previousMonth(reportingMonth) }),
-  ]);
-  const current = summarizeRows(currentRows);
-  const previous = summarizeRows(previousRows);
-
-  return {
-    filters: { ...filters, reportingMonth: monthLabel(reportingMonth) },
-    kpis: current,
-    movement: {
-      participationPercentage: movement(
-        current.participationPercentage,
-        previous.participationPercentage,
-      ),
-      evidenceSubmissionPercentage: movement(
-        current.evidenceSubmissionPercentage,
-        previous.evidenceSubmissionPercentage,
-      ),
-      attendancePercentage: movement(current.attendancePercentage, previous.attendancePercentage),
-    },
-  };
 }
 
 export async function getGeographyPerformance(filters: {
@@ -214,7 +258,10 @@ export async function getProgramSummary(filters: {
   subject?: string;
 }) {
   const dashboard = await getDashboard(filters);
-  const geographies = await getGeographyPerformance({ ...filters, level: "block" });
+  const geographies = await getGeographyPerformance({
+    ...filters,
+    level: "block",
+  });
   const kpis = dashboard.kpis;
   const weakest = geographies.lowPerforming.slice(0, 3);
 
@@ -249,7 +296,10 @@ export async function getRecommendedActions(filters: {
   grade?: string;
   subject?: string;
 }) {
-  const geographies = await getGeographyPerformance({ ...filters, level: "block" });
+  const geographies = await getGeographyPerformance({
+    ...filters,
+    level: "block",
+  });
   const candidates = geographies.lowPerforming.slice(0, 5);
   const dueDate = new Date();
   dueDate.setUTCDate(dueDate.getUTCDate() + 14);
@@ -266,7 +316,8 @@ export async function getRecommendedActions(filters: {
       district: geo.district ?? "",
       block: geo.name,
       priority,
-      owner: priority === Priority.URGENT ? "Program Lead" : "Block Coordinator",
+      owner:
+        priority === Priority.URGENT ? "Program Lead" : "Block Coordinator",
       dueDate,
       status: ActionStatus.OPEN,
       linkedMetric: weakestMetric.metric,
