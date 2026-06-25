@@ -10,10 +10,12 @@ const globalForPrisma = globalThis as unknown as {
 function createClient(): PrismaClient {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
+    console.error("DATABASE_URL is not set in environment variables");
     throw new Error("DATABASE_URL is not set.");
   }
 
-  console.log("DATABASE_URL:", databaseUrl);
+  console.log("DATABASE_URL exists:", !!databaseUrl);
+  console.log("DATABASE_URL prefix:", databaseUrl.substring(0, Math.min(20, databaseUrl.length)));
 
   // Handle SQLite (file: prefix, relative path, or .db extension)
   const isSQLite = databaseUrl.startsWith("file:") ||
@@ -31,12 +33,15 @@ function createClient(): PrismaClient {
   const usesAccelerate =
     databaseUrl.startsWith("prisma://") || databaseUrl.startsWith("prisma+postgres://");
 
+  console.log("usesAccelerate:", usesAccelerate);
+
   if (usesAccelerate) {
     return new PrismaClient({ accelerateUrl: databaseUrl }).$extends(
       withAccelerate(),
     ) as unknown as PrismaClient;
   }
 
+  console.log("Using PostgreSQL adapter");
   const adapter = new PrismaPg({ connectionString: databaseUrl });
   return new PrismaClient({ adapter });
 }
