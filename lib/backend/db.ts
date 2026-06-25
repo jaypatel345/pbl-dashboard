@@ -40,9 +40,10 @@ function createClient(): PrismaClient {
   // Use a shared pg.Pool with a connection limit safe for serverless
   const pool = new pg.Pool({
     connectionString: databaseUrl,
-    max: 5, // keep well under the 15 session-mode limit
+    max: 1, // Supabase pooler mode requires single connection
     idleTimeoutMillis: 10_000,
-    connectionTimeoutMillis: 5_000,
+    connectionTimeoutMillis: 10_000,
+    ssl: { rejectUnauthorized: false }, // Required for Supabase
   });
 
   const adapter = new PrismaPg(pool);
