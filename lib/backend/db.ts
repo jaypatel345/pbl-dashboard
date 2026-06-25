@@ -37,6 +37,20 @@ function createClient(): PrismaClient {
     ) as unknown as PrismaClient;
   }
 
+  // Check if using Supabase pooler (pgbouncer)
+  const usesPooler = databaseUrl.includes("pgbouncer=true");
+
+  if (usesPooler) {
+    // For pgbouncer, use adapter without pooling
+    const pool = new pg.Pool({
+      connectionString: databaseUrl,
+      max: 1,
+      ssl: { rejectUnauthorized: false },
+    });
+    const adapter = new PrismaPg(pool);
+    return new PrismaClient({ adapter });
+  }
+
   // Use a shared pg.Pool with a connection limit safe for serverless
   const pool = new pg.Pool({
     connectionString: databaseUrl,
