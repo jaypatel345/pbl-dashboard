@@ -4,7 +4,7 @@ A Next.js application for Mantra4Change's PBL pre-interview assignment. It inges
 
 ## Live demo
 
-_Add your deployed URL here after publishing (e.g. Vercel + hosted Postgres)._
+https://pbl-dashboard.vercel.app/
 
 ## Quick start
 
