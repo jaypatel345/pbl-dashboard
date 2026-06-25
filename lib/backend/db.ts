@@ -2,6 +2,7 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { withAccelerate } from "@prisma/extension-accelerate";
+import pg from "pg";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -10,30 +11,25 @@ const globalForPrisma = globalThis as unknown as {
 function createClient(): PrismaClient {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
-    console.error("DATABASE_URL is not set in environment variables");
     throw new Error("DATABASE_URL is not set.");
   }
 
-  console.log("DATABASE_URL exists:", !!databaseUrl);
-  console.log("DATABASE_URL prefix:", databaseUrl.substring(0, Math.min(20, databaseUrl.length)));
-
-  // Handle SQLite (file: prefix, relative path, or .db extension)
-  const isSQLite = databaseUrl.startsWith("file:") ||
-                   !databaseUrl.includes("://") ||
-                   databaseUrl.endsWith(".db");
-
-  console.log("isSQLite:", isSQLite);
+  const isSQLite =
+    databaseUrl.startsWith("file:") ||
+    !databaseUrl.includes("://") ||
+    databaseUrl.endsWith(".db");
 
   if (isSQLite) {
-    const url = databaseUrl.startsWith("file:") ? databaseUrl : `file:${databaseUrl}`;
+    const url = databaseUrl.startsWith("file:")
+      ? databaseUrl
+      : `file:${databaseUrl}`;
     const adapter = new PrismaBetterSqlite3({ url });
     return new PrismaClient({ adapter });
   }
 
   const usesAccelerate =
-    databaseUrl.startsWith("prisma://") || databaseUrl.startsWith("prisma+postgres://");
-
-  console.log("usesAccelerate:", usesAccelerate);
+    databaseUrl.startsWith("prisma://") ||
+    databaseUrl.startsWith("prisma+postgres://");
 
   if (usesAccelerate) {
     return new PrismaClient({ accelerateUrl: databaseUrl }).$extends(
@@ -41,8 +37,15 @@ function createClient(): PrismaClient {
     ) as unknown as PrismaClient;
   }
 
-  console.log("Using PostgreSQL adapter");
-  const adapter = new PrismaPg({ connectionString: databaseUrl });
+  // Use a shared pg.Pool with a connection limit safe for serverless
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    max: 5, // keep well under the 15 session-mode limit
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 5_000,
+  });
+
+  const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }
 

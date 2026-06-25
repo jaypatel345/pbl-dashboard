@@ -6,7 +6,7 @@ import { classifyRisk, parseRiskStatus } from "../risk";
 
 const DEFAULT_DATA_DIR = path.resolve(
   process.cwd(),
-  "../Open Source/Mantra4Change_PBL_AI_Prework_Candidate_Package",
+  "data/Mantra4Change_PBL_AI_Prework_Candidate_Package",
 );
 
 type CsvRow = Record<string, string>;
@@ -72,8 +72,12 @@ function yes(value: string) {
 }
 
 function parseGrades(value: string) {
-  const matches = [...value.matchAll(/\b(6|7|8)\b/g)].map((match) => `Class ${match[1]}`);
-  return matches.length ? [...new Set(matches)] : ["Class 6", "Class 7", "Class 8"];
+  const matches = [...value.matchAll(/\b(6|7|8)\b/g)].map(
+    (match) => `Class ${match[1]}`,
+  );
+  return matches.length
+    ? [...new Set(matches)]
+    : ["Class 6", "Class 7", "Class 8"];
 }
 
 function parseSubjects(value: string) {
@@ -103,13 +107,18 @@ function evidenceType(value: string) {
   return EvidenceType.OTHER;
 }
 
-export async function importAssignmentData(dataDir = process.env.ASSIGNMENT_DATA_DIR ?? DEFAULT_DATA_DIR) {
+export async function importAssignmentData(
+  dataDir = process.env.ASSIGNMENT_DATA_DIR ?? DEFAULT_DATA_DIR,
+) {
+  console.log("Data directory:", dataDir);
   const pblDir = path.join(dataDir, "02_Primary_PBL_Data", "csv_exports");
   const grantDir = path.join(dataDir, "03_Grant_Reporting_Evidence", "csv");
+  console.log("PBL directory:", pblDir);
+  console.log("Grant directory:", grantDir);
 
   const pblFiles = [
-    "PBL_School_Response_Data_July_2025.csv",
     "PBL_School_Response_Data_August_2025.csv",
+    "PBL_School_Response_Data_July_2025.csv",
     "PBL_School_Response_Data_September_2025.csv",
   ];
 
@@ -122,12 +131,18 @@ export async function importAssignmentData(dataDir = process.env.ASSIGNMENT_DATA
     evidence: 0,
   };
 
+  console.log("Starting PBL data import...");
+
   for (const file of pblFiles) {
+    console.log("Processing file:", file);
     const rows = await readCsv(path.join(pblDir, file));
+    console.log("Read", rows.length, "rows from", file);
 
     for (const row of rows) {
       const school = await prisma.school.upsert({
-        where: { schoolCode: row["What is your school's synthetic school code?"] },
+        where: {
+          schoolCode: row["What is your school's synthetic school code?"],
+        },
         create: {
           schoolCode: row["What is your school's synthetic school code?"],
           schoolName: row["What is the name of your school?"],
@@ -143,13 +158,19 @@ export async function importAssignmentData(dataDir = process.env.ASSIGNMENT_DATA
       counts.schools += 1;
 
       const reportingMonth = month(row["Reporting Month"]);
-      const pblConducted = yes(row["Was the PBL project conducted in your school this month?"]);
+      const pblConducted = yes(
+        row["Was the PBL project conducted in your school this month?"],
+      );
       const evidenceSubmitted = yes(
         row["Was evidence submitted for the completed PBL project?"],
       );
 
-      for (const grade of parseGrades(row["In which class/classes did you conduct the PBL project?"])) {
-        for (const subject of parseSubjects(row["Which subject do you teach?"])) {
+      for (const grade of parseGrades(
+        row["In which class/classes did you conduct the PBL project?"],
+      )) {
+        for (const subject of parseSubjects(
+          row["Which subject do you teach?"],
+        )) {
           const enrollment = asNumber(row[enrollmentColumn(grade)]);
           const attendance = asNumber(row[attendanceColumn(grade, subject)]);
           const attendancePercentage = enrollment ? attendance / enrollment : 0;
@@ -189,8 +210,17 @@ export async function importAssignmentData(dataDir = process.env.ASSIGNMENT_DATA
       }
     }
   }
+  console.log(
+    "PBL data import complete. Schools:",
+    counts.schools,
+    "Submissions:",
+    counts.submissions,
+  );
 
-  const financeRows = await readCsv(path.join(grantDir, "01_Grant_Profile_and_Finance.csv"));
+  console.log("Starting grant finance data import...");
+  const financeRows = await readCsv(
+    path.join(grantDir, "01_Grant_Profile_and_Finance.csv"),
+  );
   for (const row of financeRows) {
     const grant = await prisma.grant.upsert({
       where: { grantCode: row.grant_id },
@@ -230,7 +260,9 @@ export async function importAssignmentData(dataDir = process.env.ASSIGNMENT_DATA
     path.join(grantDir, "02_Grant_Performance_and_Report_Material.csv"),
   );
   for (const row of reportRows) {
-    const grant = await prisma.grant.findUnique({ where: { grantCode: row.grant_id } });
+    const grant = await prisma.grant.findUnique({
+      where: { grantCode: row.grant_id },
+    });
     if (!grant) continue;
 
     await prisma.grantReport.upsert({
@@ -246,9 +278,13 @@ export async function importAssignmentData(dataDir = process.env.ASSIGNMENT_DATA
     counts.grantReports += 1;
   }
 
-  const evidenceRows = await readCsv(path.join(grantDir, "03_Evidence_and_Media_Index.csv"));
+  const evidenceRows = await readCsv(
+    path.join(grantDir, "03_Evidence_and_Media_Index.csv"),
+  );
   for (const row of evidenceRows) {
-    const grant = await prisma.grant.findUnique({ where: { grantCode: row.grant_id } });
+    const grant = await prisma.grant.findUnique({
+      where: { grantCode: row.grant_id },
+    });
     if (!grant) continue;
 
     await prisma.evidence.upsert({
@@ -262,7 +298,10 @@ export async function importAssignmentData(dataDir = process.env.ASSIGNMENT_DATA
   return { dataDir, counts };
 }
 
-function grantFinanceData(grantId: string, row: CsvRow): Prisma.GrantFinanceLineUncheckedCreateInput {
+function grantFinanceData(
+  grantId: string,
+  row: CsvRow,
+): Prisma.GrantFinanceLineUncheckedCreateInput {
   return {
     grantId,
     reportingMonth: month(row.reporting_month),
@@ -275,7 +314,10 @@ function grantFinanceData(grantId: string, row: CsvRow): Prisma.GrantFinanceLine
   };
 }
 
-function grantReportData(grantId: string, row: CsvRow): Prisma.GrantReportUncheckedCreateInput {
+function grantReportData(
+  grantId: string,
+  row: CsvRow,
+): Prisma.GrantReportUncheckedCreateInput {
   return {
     grantId,
     reportingMonth: month(row.reporting_month),
@@ -296,7 +338,10 @@ function grantReportData(grantId: string, row: CsvRow): Prisma.GrantReportUnchec
   };
 }
 
-function evidenceData(grantId: string, row: CsvRow): Prisma.EvidenceUncheckedCreateInput {
+function evidenceData(
+  grantId: string,
+  row: CsvRow,
+): Prisma.EvidenceUncheckedCreateInput {
   return {
     recordCode: row.record_id,
     grantId,
