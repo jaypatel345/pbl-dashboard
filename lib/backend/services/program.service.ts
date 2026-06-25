@@ -1,4 +1,4 @@
-import { ActionStatus, Priority, RiskStatus } from "@prisma/client";
+import { ActionStatus, Priority } from "@/lib/backend/db";
 import { prisma } from "../db";
 import { HttpError } from "../http";
 import { buildSubmissionWhere, type SubmissionFilters } from "../models/submission.model";

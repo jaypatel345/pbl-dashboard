@@ -1,4 +1,4 @@
-import { ActionStatus, EvidenceType, Priority, RiskStatus } from "@prisma/client";
+import { ActionStatus, EvidenceType, Priority, RiskStatus } from "@/lib/backend/db";
 import { z } from "zod";
 
 const dateInput = z

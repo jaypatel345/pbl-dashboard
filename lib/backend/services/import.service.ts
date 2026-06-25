@@ -1,11 +1,13 @@
-import { EvidenceType, type Prisma } from "@prisma/client";
+import { EvidenceType, type Prisma } from "@/lib/backend/db";
 import { readFile } from "fs/promises";
 import path from "path";
 import { prisma } from "../db";
 import { classifyRisk, parseRiskStatus } from "../risk";
 
-const DEFAULT_DATA_DIR =
-  "/Users/Jaypatel/Desktop/Open Source/Mantra4Change_PBL_AI_Prework_Candidate_Package";
+const DEFAULT_DATA_DIR = path.resolve(
+  process.cwd(),
+  "../Open Source/Mantra4Change_PBL_AI_Prework_Candidate_Package",
+);
 
 type CsvRow = Record<string, string>;
 

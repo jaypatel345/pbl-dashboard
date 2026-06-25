@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/lib/backend/db";
 import { prisma } from "../db";
 
 export type SubmissionFilters = {

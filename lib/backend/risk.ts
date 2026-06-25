@@ -1,4 +1,4 @@
-import { RiskStatus } from "@prisma/client";
+import { RiskStatus } from "@/lib/backend/db";
 
 export const RISK_LABELS: Record<RiskStatus, string> = {
   ON_TRACK: "On Track",
